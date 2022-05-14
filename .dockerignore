@@ -1,0 +1,5 @@
+remote-data/
+checkpoints/
+runs/
+.git/
+**/__pycache__

@@ -1,0 +1,5 @@
+**/__pycache__
+runlog.log
+remote-data/
+runs/
+checkpoints/
