@@ -49,8 +49,8 @@ class UpSample(nn.Module):
         return input
 
 
-class Unet(nn.Module):
-    """Unet"""
+class UNet(nn.Module):
+    """UNet"""
 
     def __init__(self, channel_in: int, channel_out: int) -> None:
         super().__init__()
@@ -76,7 +76,7 @@ class Unet(nn.Module):
         self.conv_result = nn.Conv2d(32, channel_out, kernel_size=1)
 
     def forward(self, input):
-        """Unet forward.
+        """UNet forward.
 
         Args:
             input (Tensor): with shape [Batch, InChannel, H, W]
@@ -121,7 +121,7 @@ class Unet(nn.Module):
 if __name__ == "__main__":
     # test
     input = torch.rand((2, 4, 512, 512))
-    net = Unet(4, 10)
+    net = UNet(4, 10)
     output = net(input)
     print(output.shape)
     # [2, 10, 512, 512]
