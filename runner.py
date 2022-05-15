@@ -1,5 +1,6 @@
 """runner for training loop"""
 # pylint: disable=logging-fstring-interpolation
+from ctypes import util
 from pathlib import Path
 import torch
 from tqdm import tqdm
@@ -7,6 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 import task
 import utils
+import numpy as np
 from utils import get_logger, move_to_device, Saver
 from skimage.metrics import structural_similarity as compare_ssim
 from skimage.metrics import peak_signal_noise_ratio as compare_psnr
@@ -151,8 +153,9 @@ class Runner:
         psnr_meter = utils.AverageValueMeter("psnr")
         ssim_meter = utils.AverageValueMeter("ssim")
 
+        iamge_saved = False
         with torch.no_grad():
-            for _, batch_data in enumerate(tqdm(eval_loader, desc=eval_type)):
+            for idx, batch_data in enumerate(tqdm(eval_loader, desc=eval_type)):
                 inputs, labels = batch_data
                 inputs = move_to_device(inputs, self.device)
                 labels = move_to_device(labels, self.device)
@@ -160,7 +163,7 @@ class Runner:
 
                 outputs = torch.clamp(outputs, 0, 1).cpu()
                 labels = labels.cpu()
-                print("?")
+
                 for output, label in zip(outputs, labels):
                     output = output.numpy().transpose(1, 2, 0) * 255.0
                     label = label.numpy().transpose(1, 2, 0) * 255.0
@@ -175,6 +178,18 @@ class Runner:
                     )
                     psnr_meter.add(psnr, 1)
                     ssim_meter.add(ssim, 1)
+                    if idx == 0 and not iamge_saved:
+                        compare_img = np.concatenate(
+                            (output[:, :, :], label[:, :, :]), axis=1
+                        )
+                        savepath = Path(self.config.predict.output_root).joinpath(
+                            f"compare_step{self.completed_step}.jpg"
+                        )
+                        utils.toimage(
+                            compare_img, high=255, low=0, cmax=255, cmin=0
+                        ).save(savepath)
+                        image_saved = True
+
         logger.info(
             f"{eval_type} finished! mean psnr = {psnr_meter.mean}, mean ssim = {ssim_meter.mean}"
         )
