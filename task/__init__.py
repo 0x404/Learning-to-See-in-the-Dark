@@ -1,8 +1,9 @@
 """All task"""
 import sys
 from .deep_learning import MinistClassify
+from .sid import SeeInDark
 
-__all__ = ["MinistClassify"]
+__all__ = ["MinistClassify", "SeeInDark"]
 
 thismodule = sys.modules[__name__]
 required_attribute = ["model", "optimizer", "loss_function"]

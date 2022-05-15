@@ -1,4 +1,4 @@
 """All dataset"""
 from .minist_dataset import MinistDataset
-
-__all__ = ["MinistDataset"]
+from .sid import DataSetSID
+__all__ = ["MinistDataset", "DataSetSID"]
