@@ -121,9 +121,9 @@ class DataSetSID(Dataset):
             label_path = self.root.joinpath(Path(raw_img_label[7:])).absolute()
 
         if input_path not in self.fname2id:
-            self.fname2id[input_path] = len(self.fname2id) + 1
+            self.fname2id[str(input_path)] = len(self.fname2id) + 1
         if label_path not in self.fname2id:
-            self.fname2id[label_path] = len(self.fname2id) + 1
+            self.fname2id[str(label_path)] = len(self.fname2id) + 1
 
         input_exposure = float(input_path.stem.split("_")[-1][:-1])
         label_exposure = float(label_path.stem.split("_")[-1][:-1])
@@ -165,7 +165,7 @@ class DataSetSID(Dataset):
             label = label.transpose(2, 0, 1)
         else:
             process_cfg = self.config.raw_process
-            label_id = self.fname2id[str(item["label_id"])]
+            label_id = self.fname2id[str(item["label_path"])]
             if self.iamge_cache[label_id] is None:
                 self.iamge_cache[label_id] = rawpy.imread(str(item["label_path"]))
             label = self.iamge_cache[image_id]
