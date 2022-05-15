@@ -55,6 +55,7 @@ class Runner:
             dataset=self.task.train_dataset,
             batch_size=config.batch_size,
             num_workers=setup.get("data_worker_num", 1),
+            pin_memory=True,
             collate_fn=getattr(self.task, "collate_fn", None),
             shuffle=True,
         )

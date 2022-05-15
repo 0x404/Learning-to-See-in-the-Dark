@@ -94,6 +94,8 @@ class DataSetSID(Dataset):
         self.pack_fn = pack_fn
         self.transform = transform
         self.data = []
+        self.fname2id = {}
+        self.iamge_cache = [None] * 6000
         # input-demo: http://data-rainy.oss-cn-beijing.aliyuncs.com/data/SID-demo/00001_00_0.1s.ARW
         # label-demo: http://data-rainy.oss-cn-beijing.aliyuncs.com/data/SID-demo/00001_00_10s.ARW
 
@@ -117,6 +119,11 @@ class DataSetSID(Dataset):
             label_path = self.png_root.joinpath(Path(raw_img_label[7:])).absolute()
         else:
             label_path = self.root.joinpath(Path(raw_img_label[7:])).absolute()
+
+        if input_path not in self.fname2id:
+            self.fname2id[input_path] = len(self.fname2id) + 1
+        if label_path not in self.fname2id:
+            self.fname2id[label_path] = len(self.fname2id) + 1
 
         input_exposure = float(input_path.stem.split("_")[-1][:-1])
         label_exposure = float(label_path.stem.split("_")[-1][:-1])
@@ -144,7 +151,10 @@ class DataSetSID(Dataset):
     def __getitem__(self, index):
         item = self.data[index]
         # read input image
-        image = rawpy.imread(str(item["input_path"]))
+        image_id = self.fname2id[str(item["input_path"])]
+        if self.iamge_cache[image_id] is None:
+            self.iamge_cache[image_id] = rawpy.imread(str(item["input_path"]))
+        image = self.iamge_cache[image_id]
         image = self.pack_fn(image) * item["ratio"]
         image = image.transpose(2, 0, 1)
 
@@ -155,7 +165,10 @@ class DataSetSID(Dataset):
             label = label.transpose(2, 0, 1)
         else:
             process_cfg = self.config.raw_process
-            label = rawpy.imread(str(item["label_path"]))
+            label_id = self.fname2id[str(item["label_id"])]
+            if self.iamge_cache[label_id] is None:
+                self.iamge_cache[label_id] = rawpy.imread(str(item["label_path"]))
+            label = self.iamge_cache[image_id]
             label = label.postprocess(
                 use_camera_wb=process_cfg.use_camera_wb,
                 no_auto_bright=process_cfg.no_auto_bright,
