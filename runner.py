@@ -153,7 +153,7 @@ class Runner:
         psnr_meter = utils.AverageValueMeter("psnr")
         ssim_meter = utils.AverageValueMeter("ssim")
 
-        iamge_saved = False
+        image_saved = False
         with torch.no_grad():
             for idx, batch_data in enumerate(tqdm(eval_loader, desc=eval_type)):
                 inputs, labels = batch_data
@@ -178,7 +178,7 @@ class Runner:
                     )
                     psnr_meter.add(psnr, 1)
                     ssim_meter.add(ssim, 1)
-                    if idx == 0 and not iamge_saved:
+                    if idx == 0 and not image_saved:
                         compare_img = np.concatenate(
                             (output[:, :, :], label[:, :, :]), axis=1
                         )
