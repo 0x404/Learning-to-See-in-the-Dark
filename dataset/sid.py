@@ -178,8 +178,13 @@ class DataSetSID(Dataset):
                 rand_x * 2 : rand_x * 2 + patch_size * 2,
                 rand_y * 2 : rand_y * 2 + patch_size * 2,
             ]
+            # the reason why we make label patch [3, patch_size * 2, patch_size * 2]
+            # is that input of model is [4, patch_size, patch_size]
+            # and the output of model is [12, patch_size, patch_size]
+            # and we use L1loss as criterion function,
+            # so we need to label element sum equals output element sum
 
-        # apply other transform
+        # apply other transforms
         if self.transform is not None:
             for t in self.transform:
                 image = t(image, self.config.transform)
@@ -188,4 +193,3 @@ class DataSetSID(Dataset):
         image = torch.from_numpy(image.copy()).float()
         label = torch.from_numpy(label.copy()).float()
         return image, label
-   

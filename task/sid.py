@@ -32,12 +32,14 @@ class SeeInDark:
             gamma=train_cfg.lr_gamma,
         )
 
-        # dataset conifg
+        # compose transfroms
         transfrom = []
         if data_cfg.transform.use_flip:
             transfrom.append(filp_transform)
         if data_cfg.transform.use_rotation:
             transfrom.append(rotation_transform)
+
+        # dataset
         self.train_dataset = DataSetSID(
             config=data_cfg,
             file=Path(data_cfg.data_root).joinpath("Sony_train_list.txt").absolute(),

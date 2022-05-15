@@ -15,29 +15,23 @@ task = dict(name="SeeInDark")
 data = dict(
     camera="sony",
     data_root="sony/",
-
     # if use constant amplification, then `ratio =  amplification ratio`
     # if not use constant amplification, then `ratio = min(actual amplification, amplification ratio)`
     use_constant_amplification=False,
     amplification_ratio=300,
-    
     # whther to transform label iamge to png
     # if use png label, then provide png label root
     use_png_label=False,
     png_root="",
-    
     # use transform to enhance data
     transform=dict(
         use_patch=True,
         patch_size=512,
-        
         use_flip=True,
         filp_prob=0.5,
-        
         use_rotation=True,
         rotation_prob=0.5,
     ),
-    
     # config of rawpy when processing raw iamge
     raw_process=dict(
         use_camera_wb=False,
@@ -45,16 +39,13 @@ data = dict(
         half_size=False,
         output_bps=16,
     ),
-    
     # load limit
     limit=None,
-    
 )
 train = dict(
-    lr=1e-4,    # become 1e-5 when epoch = 2000
+    lr=1e-4,  # become 1e-5 when epoch = 2000
     lr_step=2000,
     lr_gamma=0.1,
-    
     batch_size=32,
     epochs=4000,
     accumulate_step=1,
