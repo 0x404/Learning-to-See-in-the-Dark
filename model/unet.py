@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn import functional
 
 
 class Conv(nn.Module):
@@ -115,6 +116,7 @@ class UNet(nn.Module):
         output = self.conv_up4(output)  # channel = 32
 
         output = self.conv_result(output)
+        output = functional.pixel_shuffle(output, 2)
         return output
 
 

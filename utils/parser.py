@@ -117,6 +117,10 @@ class Parser:
                 f"data root {self.config.data.data_root} should be a directory"
             )
 
+        pred_root = self.config.predict.output_root
+        if not os.path.isdir(pred_root):
+            os.makedirs(pred_root)
+
     def _check_ckpt_config(self):
         """Check checkpoint config, make dirs if needed"""
         init_ckpt = self.config.train.init_checkpoint

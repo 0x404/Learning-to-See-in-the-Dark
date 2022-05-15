@@ -2,14 +2,15 @@ import os
 import torch
 
 setup = dict(
-    do_train=False,
-    do_predict=False,
+    do_train=True,
+    do_predict=True,
     tensorboard=False,
+    data_worker_num=3,
     device="cuda" if torch.cuda.is_available() else "cpu",
-    max_checkpoints=3,
+    max_checkpoints=5,
     checkpoint_path=os.path.join("checkpoints", "test"),
-    log_every_n_step=1,
-    save_ckpt_n_step=5,
+    log_every_n_step=100,
+    save_ckpt_n_step=1000,
 )
 task = dict(name="SeeInDark")
 data = dict(
@@ -47,7 +48,7 @@ train = dict(
     lr_step=2000,
     lr_gamma=0.1,
     batch_size=32,
-    epochs=4000,
+    epochs=1,
     accumulate_step=1,
     init_checkpoint=None,
     max_step=None,

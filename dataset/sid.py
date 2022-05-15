@@ -144,7 +144,6 @@ class DataSetSID(Dataset):
     def __getitem__(self, index):
         item = self.data[index]
         # read input image
-        print(item["input_path"])
         image = rawpy.imread(str(item["input_path"]))
         image = self.pack_fn(image) * item["ratio"]
         image = image.transpose(2, 0, 1)

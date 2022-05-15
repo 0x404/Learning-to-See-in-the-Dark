@@ -1,11 +1,15 @@
 """runner for training loop"""
 # pylint: disable=logging-fstring-interpolation
+from pathlib import Path
 import torch
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 import task
+import utils
 from utils import get_logger, move_to_device, Saver
+from skimage.metrics import structural_similarity as compare_ssim
+from skimage.metrics import peak_signal_noise_ratio as compare_psnr
 
 logger = get_logger(__name__)
 
@@ -22,6 +26,7 @@ class Runner:
         self.model = self.task.model
         self.model_saver = Saver(self.model, config)
         self.device = torch.device(config.setup.device)
+        self.completed_step = 0
         logger.info(f"training on {self.device}")
 
         if config.train.init_checkpoint is not None:
@@ -47,6 +52,7 @@ class Runner:
         train_loader = DataLoader(
             dataset=self.task.train_dataset,
             batch_size=config.batch_size,
+            num_workers=setup.get("data_worker_num", 1),
             collate_fn=getattr(self.task, "collate_fn", None),
             shuffle=True,
         )
@@ -64,7 +70,6 @@ class Runner:
         logger.info(f"  Accumulate Gradient Step = {config.accumulate_step}")
         logger.info(f"  Model Structure = {model}")
 
-        completed_step = 0
         for epoch in range(config.epochs):
             for step, batch_data in enumerate(train_loader):
                 inputs, labels = batch_data
@@ -87,30 +92,28 @@ class Runner:
                 if step % config.accumulate_step == 0 or step == len(train_loader) - 1:
                     optimizer.step()
                     optimizer.zero_grad()
-                    completed_step += 1
+                    self.completed_step += 1
                     if self.writer is not None:
-                        self.writer.add_scalar("loss", loss.item(), completed_step)
+                        self.writer.add_scalar("loss", loss.item(), self.completed_step)
 
                 if (
-                    completed_step % setup.log_every_n_step == 0
-                    or completed_step == total_step
+                    self.completed_step % setup.log_every_n_step == 0
+                    or self.completed_step == total_step
                 ):
-                    if completed_step == 0:
+                    if self.completed_step == 0:
                         continue
-                    progress_tag = 100 * completed_step / total_step
+                    progress_tag = 100 * self.completed_step / total_step
                     logger.info(
-                        f"[{progress_tag:.2f}%]\t epoch:{epoch}\t step:{completed_step}\t loss:{loss.item()}"
+                        f"[{progress_tag:.2f}%]\t epoch:{epoch}\t step:{self.completed_step}\t loss:{loss.item()}"
                     )
 
-                if completed_step % setup.save_ckpt_n_step == 0:
-                    if completed_step == 0:
+                if self.completed_step % setup.save_ckpt_n_step == 0:
+                    if self.completed_step == 0:
                         continue
                     accuracy = self.eval(is_training=True)
                     self.model_saver.save_model(accuracy)
-                    if self.writer is not None:
-                        self.writer.add_scalar("accuracy", accuracy, completed_step)
 
-                if completed_step >= total_step:
+                if self.completed_step >= total_step:
                     logger.info(
                         f"reach max training step {total_step}, breaking from training loop."
                     )
@@ -119,7 +122,7 @@ class Runner:
                         self.writer.close()
                     break
 
-            if completed_step >= total_step:
+            if self.completed_step >= total_step:
                 break
             if lr_scheduler is not None:
                 lr_scheduler.step()
@@ -137,29 +140,52 @@ class Runner:
         eval_loader = DataLoader(
             dataset=self.task.valid_dataset,
             batch_size=config.batch_size,
+            num_workers=self.config.setup.get("data_worker_num", 1),
             collate_fn=getattr(self.task, "collate_fn", None),
         )
         eval_type = "Evalution" if is_training else "Prediction"
         logger.info(f"********** Running {eval_type} **********")
         logger.info(f"  Num Examples = {len(eval_loader)}")
         logger.info(f"  Batch Size = {eval_loader.batch_size}")
-        total = 0
-        correct = 0
+
+        psnr_meter = utils.AverageValueMeter("psnr")
+        ssim_meter = utils.AverageValueMeter("ssim")
+
         with torch.no_grad():
             for _, batch_data in enumerate(tqdm(eval_loader, desc=eval_type)):
                 inputs, labels = batch_data
                 inputs = move_to_device(inputs, self.device)
                 labels = move_to_device(labels, self.device)
                 outputs = self.model(inputs)
-                _, pred = torch.max(outputs, dim=1)
-                batch_size = pred.shape[0]
-                correct += sum(
-                    [1 if pred[i] == labels[i] else 0 for i in range(batch_size)]
-                )
-                total += batch_size
-        accuracy = correct / total
-        logger.info(f"{eval_type} Finish!\tAccuracy:{accuracy * 100:.2f}%")
-        return accuracy
+
+                outputs = torch.clamp(outputs, 0, 1).cpu()
+                labels = labels.cpu()
+                print("?")
+                for output, label in zip(outputs, labels):
+                    output = output.numpy().transpose(1, 2, 0) * 255.0
+                    label = label.numpy().transpose(1, 2, 0) * 255.0
+                    psnr = compare_psnr(output, label, data_range=255)
+                    ssim = compare_ssim(
+                        output,
+                        label,
+                        data_range=255,
+                        gaussian_weights=True,
+                        use_sample_covariance=False,
+                        multichannel=True,
+                    )
+                    psnr_meter.add(psnr, 1)
+                    ssim_meter.add(ssim, 1)
+        logger.info(
+            f"{eval_type} finished! mean psnr = {psnr_meter.mean}, mean ssim = {ssim_meter.mean}"
+        )
+        if self.writer is not None:
+            self.writer.add_scalar(
+                psnr_meter.name, psnr_meter.mean, self.completed_step
+            )
+            self.writer.add_scalar(
+                ssim_meter.name, ssim_meter.mean, self.completed_step
+            )
+        return psnr_meter.mean
 
     def predict(self):
         """Do prediction.
@@ -170,19 +196,22 @@ class Runner:
         config = self.config.predict
         self.model_saver.load_best_model()
         self.eval()
+
         pred_loader = DataLoader(
             dataset=self.task.pred_dataset,
             batch_size=1,
             collate_fn=getattr(self.task, "collate_fn", None),
         )
-        predictions = []
         with torch.no_grad():
-            for data in tqdm(pred_loader, desc="test"):
+            for idx, data in enumerate(tqdm(pred_loader, desc="test")):
                 inputs, _ = data
                 inputs = move_to_device(inputs, self.device)
                 outputs = self.model(inputs)
-                _, pred = torch.max(outputs, dim=1)
-                predictions.append(pred.item())
-        with open(config.output_root, mode="w", encoding="utf-8") as file:
-            for pred in predictions:
-                file.write(f"{pred}\n")
+                outputs = outputs.squeeze()
+
+                outputs = torch.clamp(outputs, 0, 1).cpu()
+                outputs = outputs.numpy().transpose(1, 2, 0) * 255.0
+                filename = Path(f"{config.output_root}").joinpath(f"result_{idx}.jpg")
+                utils.toimage(outputs, high=255, low=0, cmax=255, cmin=0).save(
+                    str(filename)
+                )
