@@ -22,15 +22,15 @@ class SeeInDark:
         self.loss_function = torch.nn.L1Loss()
         self.loss_function.to(device=device)
 
-        # # optimizer
-        # self.optimizer = optim.Adam(self.model.parameters, lr=train_cfg.lr)
+        # optimizer
+        self.optimizer = optim.Adam(self.model.parameters(), lr=train_cfg.lr)
 
         # lr scheduler
-        # self.lr_scheduler = optim.lr_scheduler.StepLR(
-        #     optimizer=self.optimizer,
-        #     step_size=train_cfg.lr_step,
-        #     gamma=train_cfg.lr_gamma,
-        # )
+        self.lr_scheduler = optim.lr_scheduler.StepLR(
+            optimizer=self.optimizer,
+            step_size=train_cfg.lr_step,
+            gamma=train_cfg.lr_gamma,
+        )
 
         # dataset conifg
         transfrom = []
@@ -56,6 +56,3 @@ class SeeInDark:
             pack_fn=snoy_pack,
             transform=transfrom,
         )
-        x, y = self.train_dataset.__getitem__(0)
-        print(x.shape)
-        print(y.shape)
