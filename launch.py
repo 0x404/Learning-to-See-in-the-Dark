@@ -1,7 +1,7 @@
 """launcher"""
 from asyncio.log import logger
 from utils import Parser
-from runner import Runner
+from trainer import Trainer
 import logging
 
 logger = logging.getLogger(__name__)
@@ -12,11 +12,9 @@ def main():
     config = Parser().config
     logger.info("launching runner ...")
     logger.info(f"configs : {config}")
-    runner = Runner(config)
+    runner = Trainer(config)
     if config.setup.do_train:
         runner.train()
-    if config.setup.do_predict:
-        runner.predict()
     logger.info("runner finished! ᕦ(･ㅂ･)ᕤ")
 
 

@@ -1,3 +1,4 @@
+from cProfile import label
 import rawpy
 import torch
 import numpy as np
@@ -6,38 +7,41 @@ from pathlib import Path
 from torch.utils.data import Dataset
 
 
-def filp_transform(image, config):
+def filp_transform(image1, image2, config):
     """Fliping an image by probility.
 
     Args:
-        image (numpy.ndarray): with shape [C, H, W].
+        image (numpy.ndarray): with shape [B, H, W, C].
         config (Config): transform config.
 
     Returns:
-        numpy.ndarray: with shape [C, H, W].
+        numpy.ndarray: with shape [B, H, W, C].
     """
     # filp horizontally
     if np.random.random() < config.filp_prob:
-        image = np.flip(image, axis=2)
+        image1 = np.flip(image1, axis=2)
+        image2 = np.flip(image2, axis=2)
     # filp vertically
     if np.random.random() < config.filp_prob:
-        image = np.flip(image, axis=1)
-    return image
+        image1 = np.flip(image1, axis=1)
+        image2 = np.flip(image2, axis=1)
+    return image1, image2
 
 
-def rotation_transform(image, config):
+def rotation_transform(image1, image2, config):
     """Rotation an image by probility.
 
     Args:
-        image (numpy.ndarray): with shape [C, H, W].
+        image (numpy.ndarray): with shape [B, H, W, C].
         config (Config): transform config.
 
     Returns:
-        numpy.ndarray: with shape [C, W, H] by probility.
+        numpy.ndarray: with shape [B, W, H, C] by probility.
     """
     if np.random.random() < config.rotation_prob:
-        image = np.transpose(image, (0, 2, 1))
-    return image
+        image1 = np.transpose(image1, (0, 2, 1, 3))
+        image2 = np.transpose(image2, (0, 2, 1, 3))
+    return image1, image2
 
 
 def snoy_pack(raw):
@@ -78,7 +82,7 @@ def snoy_pack(raw):
 class DataSetSID(Dataset):
     """SID Dataset"""
 
-    def __init__(self, config, file, pack_fn, transform=None):
+    def __init__(self, config, file):
         """SID Dataset.
 
         Args:
@@ -91,8 +95,6 @@ class DataSetSID(Dataset):
         self.config = config
         self.root = Path(config.data_root)
         self.png_root = Path(config.png_root) if config.use_png_label else None
-        self.pack_fn = pack_fn
-        self.transform = transform
         self.data = []
         self.fname2id = {}
         self.iamge_cache = [None] * 6000
@@ -127,6 +129,7 @@ class DataSetSID(Dataset):
 
         input_exposure = float(input_path.stem.split("_")[-1][:-1])
         label_exposure = float(label_path.stem.split("_")[-1][:-1])
+        id = int(label_path.stem[:5])
 
         if self.config.use_constant_amplification:
             amplification_ratio = self.config.amplification_ratio
@@ -137,6 +140,7 @@ class DataSetSID(Dataset):
 
         self.data.append(
             {
+                "id": id,
                 "input_path": input_path,
                 "label_path": label_path,
                 "input_exposure": input_exposure,
@@ -149,59 +153,4 @@ class DataSetSID(Dataset):
         return len(self.data)
 
     def __getitem__(self, index):
-        item = self.data[index]
-        # read input image
-        image_id = self.fname2id[str(item["input_path"])]
-        if self.iamge_cache[image_id] is None:
-            self.iamge_cache[image_id] = rawpy.imread(str(item["input_path"]))
-        image = self.iamge_cache[image_id]
-        image = self.pack_fn(image) * item["ratio"]
-        image = image.transpose(2, 0, 1)
-
-        # read label image
-        if self.config.use_png_label:
-            label = np.array(PIL.Image.open(str(item["label_path"])), dtype=np.float32)
-            label = label / 255.0
-            label = label.transpose(2, 0, 1)
-        else:
-            process_cfg = self.config.raw_process
-            label_id = self.fname2id[str(item["label_path"])]
-            if self.iamge_cache[label_id] is None:
-                self.iamge_cache[label_id] = rawpy.imread(str(item["label_path"]))
-            label = self.iamge_cache[image_id]
-            label = label.postprocess(
-                use_camera_wb=process_cfg.use_camera_wb,
-                no_auto_bright=process_cfg.no_auto_bright,
-                half_size=process_cfg.half_size,
-                output_bps=process_cfg.output_bps,
-            )
-            label = np.float32(label / 65535.0)
-            label = label.transpose(2, 0, 1)
-
-        # apply patch transform
-        if self.config.transform.use_patch:
-            patch_size = self.config.transform.patch_size
-            H, W = image.shape[1], image.shape[2]
-            rand_x = np.random.randint(0, H - patch_size)
-            rand_y = np.random.randint(0, W - patch_size)
-            image = image[:, rand_x : rand_x + patch_size, rand_y : rand_y + patch_size]
-            label = label[
-                :,
-                rand_x * 2 : rand_x * 2 + patch_size * 2,
-                rand_y * 2 : rand_y * 2 + patch_size * 2,
-            ]
-            # the reason why we make label patch [3, patch_size * 2, patch_size * 2]
-            # is that input of model is [4, patch_size, patch_size]
-            # and the output of model is [12, patch_size, patch_size]
-            # and we use L1loss as criterion function,
-            # so we need to label element sum equals output element sum
-
-        # apply other transforms
-        if self.transform is not None:
-            for t in self.transform:
-                image = t(image, self.config.transform)
-
-        # move to tensor
-        image = torch.from_numpy(image.copy()).float()
-        label = torch.from_numpy(label.copy()).float()
-        return image, label
+        return self.data[index]

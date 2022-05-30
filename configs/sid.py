@@ -4,18 +4,17 @@ import torch
 setup = dict(
     do_train=True,
     do_predict=True,
-    tensorboard=False,
-    data_worker_num=1,
+    tensorboard=True,
     device="cuda" if torch.cuda.is_available() else "cpu",
-    max_checkpoints=5,
-    checkpoint_path=os.path.join("checkpoints", "test"),
+    max_checkpoints=10,
+    checkpoint_path=os.path.join("checkpoints", "SID"),
     log_every_n_step=100,
-    save_ckpt_n_step=1000,
+    save_ckpt_n_step=500,
 )
 task = dict(name="SeeInDark")
 data = dict(
     camera="sony",
-    data_root="/data/dataset/Sony/",
+    data_root="sony/",
     # if use constant amplification, then `ratio =  amplification ratio`
     # if not use constant amplification, then `ratio = min(actual amplification, amplification ratio)`
     use_constant_amplification=False,
@@ -47,13 +46,13 @@ train = dict(
     lr=1e-4,  # become 1e-5 when epoch = 2000
     lr_step=2000,
     lr_gamma=0.1,
-    batch_size=32,
+    batch_size=1,
     epochs=4000,
     accumulate_step=1,
     init_checkpoint=None,
     max_step=None,
 )
-predict = dict(batch_size=32, output_root="predictions")
+predict = dict(batch_size=1, output_root="predictions")
 
 model = dict(
     channel_in=4,
