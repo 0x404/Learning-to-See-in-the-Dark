@@ -1,18 +1,21 @@
+"""SID trainer"""
+from pathlib import Path
+
 import torch
+import rawpy
+import numpy as np
 from torch import optim
+from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import DataLoader
+from skimage.metrics import structural_similarity as compare_ssim
+from skimage.metrics import peak_signal_noise_ratio as compare_psnr
+from tqdm import tqdm
+
+import utils
+from utils import get_logger, Saver
 from model import UNet
 from dataset import DataSetSID
 from dataset.sid import snoy_pack, filp_transform, rotation_transform
-from pathlib import Path
-from torch.utils.data import DataLoader
-import rawpy
-import numpy as np
-from utils import get_logger, Saver
-from tqdm import tqdm
-import utils
-from skimage.metrics import structural_similarity as compare_ssim
-from skimage.metrics import peak_signal_noise_ratio as compare_psnr
-from torch.utils.tensorboard import SummaryWriter
 
 logger = get_logger(__name__)
 
@@ -28,7 +31,10 @@ input_with_ratio = {
     "300": [None for _ in range(25000)],
 }
 
+
 class Trainer:
+    """A simple Trainer for SID"""
+
     def __init__(self, config) -> None:
         self.config = config
         self.device = config.setup.device
@@ -42,6 +48,17 @@ class Trainer:
             self.writer = SummaryWriter()
 
     def load_data(self, item, config, transfroms=None, fixed=False):
+        """Load training input and label
+
+        Args:
+            item (Dict): including input path, label path, id, ratio.
+            config (Config): data config.
+            transfroms (List[Callable], optional): transfroms. Defaults to None.
+            fixed (bool, optional): patch position fixed. Defaults to False.
+
+        Returns:
+            Tensor, Tensor: input and label.
+        """
         image_id = item["id"]
         ratio = item["ratio"]
         label_path = item["label_path"]
@@ -75,10 +92,10 @@ class Trainer:
             # and we use L1loss as criterion function,
             # so we need to label element sum equals output element sum
             patch_size = config.transform.patch_size
-            H = input_with_ratio[str(ratio)[:3]][image_id].shape[1]
-            W = input_with_ratio[str(ratio)[:3]][image_id].shape[2]
-            rand_x = np.random.randint(0, H - patch_size)
-            rand_y = np.random.randint(0, W - patch_size)
+            height = input_with_ratio[str(ratio)[:3]][image_id].shape[1]
+            width = input_with_ratio[str(ratio)[:3]][image_id].shape[2]
+            rand_x = np.random.randint(0, height - patch_size)
+            rand_y = np.random.randint(0, width - patch_size)
             if fixed:
                 rand_x = 500
                 rand_y = 500
@@ -104,10 +121,16 @@ class Trainer:
         return input, label
 
     def train(self):
-        self.eval(True, 0)
+        """Training pipeline"""
+
+        # make evaluation before training,
+        # to check the correctness of recovering from checkpoint
+        self.eval(is_training=True, global_step=0)
+
         traincfg = self.config.train
         datacfg = self.config.data
         setup = self.config.setup
+
         loss_function = torch.nn.L1Loss()
         loss_function.to(self.device)
 
@@ -124,20 +147,32 @@ class Trainer:
         )
         dataloader = DataLoader(dataset, collate_fn=collate_fn)
 
+        # compose transform functions
         transforms = []
         if datacfg.transform.use_flip:
             transforms.append(filp_transform)
         if datacfg.transform.use_rotation:
             transforms.append(rotation_transform)
 
+        # calculate total step according to config
         total_step = traincfg.max_step
         if total_step is None:
             total_step = traincfg.epochs * len(dataloader)
         total_step = min(total_step, traincfg.epochs * len(dataloader))
+
+        logger.info("********** Running training **********")
+        logger.info(f"  Num Examples = {len(dataloader)}")
+        logger.info(f"  Num Epochs = {traincfg.epochs}")
+        logger.info(f"  Global Total Step = {total_step}")
+        logger.info(f"  Train Batch Size = {traincfg.batch_size}")
+        logger.info(f"  Accumulate Gradient Step = {traincfg.accumulate_step}")
+        logger.info(f"  Model Structure = {self.model}")
         completed_step = 0
+
+        # do train
         for epoch in range(traincfg.epochs):
             for _, data in enumerate(dataloader):
-                # print(_)
+
                 input, label = self.load_data(data[0], datacfg, transforms)
                 output = self.model(input)
 
@@ -160,8 +195,10 @@ class Trainer:
                         self.writer.add_scalar("loss", loss.item(), completed_step)
 
                 if completed_step % setup.save_ckpt_n_step == 0:
+                    # use psnr as standard of model performance
                     psnr = self.eval(is_training=True, global_step=completed_step)
                     self.saver.save_model(psnr)
+
             lr_scheduler.step()
 
         if self.writer is not None:
@@ -169,6 +206,15 @@ class Trainer:
             self.writer.close()
 
     def eval(self, is_training=False, global_step=0):
+        """Do evaluation.
+
+        Args:
+            is_training (bool, optional): whther is in training pipeline. Defaults to False.
+            global_step (int, optional): global step, used to update tensorboard. Defaults to 0.
+
+        Returns:
+            _type_: _description_
+        """
         datacfg = self.config.data
         dataset = DataSetSID(
             config=datacfg,
@@ -206,6 +252,8 @@ class Trainer:
                     )
                     psnr_meter.add(psnr, 1)
                     ssim_meter.add(ssim, 1)
+
+                    # compare and save model output between ground truth
                     if is_training and not image_saved:
                         compare_img = np.concatenate(
                             (output[:, :, :], label[:, :, :]), axis=1
