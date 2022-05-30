@@ -21,15 +21,12 @@ def collate_fn(batch):
     return batch
 
 
-label_image = [None for _ in range(6000)]
+label_image = [None for _ in range(25000)]
 input_with_ratio = {
-    "100": [None for _ in range(6000)],
-    "250": [None for _ in range(6000)],
-    "300": [None for _ in range(6000)],
+    "100": [None for _ in range(25000)],
+    "250": [None for _ in range(25000)],
+    "300": [None for _ in range(25000)],
 }
-test_patch_x = 500
-test_patch_y = 500
-
 
 class Trainer:
     def __init__(self, config) -> None:
@@ -107,6 +104,7 @@ class Trainer:
         return input, label
 
     def train(self):
+        self.eval(True, 0)
         traincfg = self.config.train
         datacfg = self.config.data
         setup = self.config.setup
@@ -139,6 +137,7 @@ class Trainer:
         completed_step = 0
         for epoch in range(traincfg.epochs):
             for _, data in enumerate(dataloader):
+                # print(_)
                 input, label = self.load_data(data[0], datacfg, transforms)
                 output = self.model(input)
 
