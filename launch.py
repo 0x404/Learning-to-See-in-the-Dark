@@ -15,6 +15,8 @@ def main():
     runner = Trainer(config)
     if config.setup.do_train:
         runner.train()
+    if config.setup.do_predict:
+        runner.predict()
     logger.info("runner finished! ᕦ(･ㅂ･)ᕤ")
 
 

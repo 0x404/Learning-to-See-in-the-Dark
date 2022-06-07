@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from skimage.metrics import structural_similarity as compare_ssim
 from skimage.metrics import peak_signal_noise_ratio as compare_psnr
 from tqdm import tqdm
+from PIL import Image
 
 import utils
 from utils import get_logger, Saver
@@ -108,6 +109,9 @@ class Trainer:
                 rand_y * 2 : rand_y * 2 + patch_size * 2,
                 :,
             ]
+        else:
+            input = input_with_ratio[str(ratio)[:3]][image_id]
+            label = label_image[image_id]
 
         # apply transfrom
         if transfroms is not None:
@@ -204,6 +208,29 @@ class Trainer:
         if self.writer is not None:
             self.writer.flush()
             self.writer.close()
+    
+    def predict(self):
+        datacfg = self.config.data
+        setup = self.config.setup
+
+        dataset = DataSetSID(
+            config=datacfg,
+            file=Path(datacfg.data_root).joinpath("Sony_val_list.txt").absolute(),
+        )
+        dataloader = DataLoader(dataset, collate_fn=collate_fn)
+
+        with torch.no_grad():
+            for idx, data in enumerate(dataloader):
+                input, label = self.load_data(data[0], datacfg)
+                output = self.model(input)
+                output = output.permute(0, 2, 3, 1).cpu().data.numpy()
+                output = np.minimum(np.maximum(output,0),1)
+                output = output[0, :, :, :]
+                file_name = Path("predictions").joinpath(f"model_output{idx}.png")
+                logger.info(str(file_name))
+                Image.fromarray((output * 255).astype('uint8')).save(str(file_name))
+
+
 
     def eval(self, is_training=False, global_step=0):
         """Do evaluation.
