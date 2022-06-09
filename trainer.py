@@ -222,13 +222,18 @@ class Trainer:
         with torch.no_grad():
             for idx, data in enumerate(dataloader):
                 input, label = self.load_data(data[0], datacfg)
+                
                 output = self.model(input)
                 output = output.permute(0, 2, 3, 1).cpu().data.numpy()
+                label = label.permute(0, 2, 3, 1).cpu().data.numpy()
                 output = np.minimum(np.maximum(output,0),1)
                 output = output[0, :, :, :]
-                file_name = Path("predictions").joinpath(f"model_output{idx}.png")
-                logger.info(str(file_name))
-                Image.fromarray((output * 255).astype('uint8')).save(str(file_name))
+                label = label[0, :, :, :]
+                modelout_name = Path("predictions").joinpath(f"model_output{idx}.png")
+                ground_truth = Path("predictions").joinpath(f"ground_truth{idx}.png")
+                logger.info(str(modelout_name))
+                Image.fromarray((output * 255).astype('uint8')).save(str(modelout_name))
+                Image.fromarray((label * 255.0).astype('uint8')).save(str(ground_truth))
 
 
 
