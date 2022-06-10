@@ -208,7 +208,7 @@ class Trainer:
         if self.writer is not None:
             self.writer.flush()
             self.writer.close()
-    
+
     def predict(self):
         datacfg = self.config.data
         setup = self.config.setup
@@ -222,20 +222,18 @@ class Trainer:
         with torch.no_grad():
             for idx, data in enumerate(dataloader):
                 input, label = self.load_data(data[0], datacfg)
-                
+
                 output = self.model(input)
                 output = output.permute(0, 2, 3, 1).cpu().data.numpy()
                 label = label.permute(0, 2, 3, 1).cpu().data.numpy()
-                output = np.minimum(np.maximum(output,0),1)
+                output = np.minimum(np.maximum(output, 0), 1)
                 output = output[0, :, :, :]
                 label = label[0, :, :, :]
                 modelout_name = Path("predictions").joinpath(f"model_output{idx}.png")
                 ground_truth = Path("predictions").joinpath(f"ground_truth{idx}.png")
                 logger.info(str(modelout_name))
-                Image.fromarray((output * 255).astype('uint8')).save(str(modelout_name))
-                Image.fromarray((label * 255.0).astype('uint8')).save(str(ground_truth))
-
-
+                Image.fromarray((output * 255).astype("uint8")).save(str(modelout_name))
+                Image.fromarray((label * 255.0).astype("uint8")).save(str(ground_truth))
 
     def eval(self, is_training=False, global_step=0):
         """Do evaluation.
