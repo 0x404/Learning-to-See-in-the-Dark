@@ -129,7 +129,8 @@ class Trainer:
 
         # make evaluation before training,
         # to check the correctness of recovering from checkpoint
-        self.eval(is_training=True, global_step=0)
+        if self.config.train.init_checkpoint is not None:
+            self.eval(is_training=True, global_step=0)
 
         traincfg = self.config.train
         datacfg = self.config.data
