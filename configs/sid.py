@@ -2,9 +2,9 @@ import os
 import torch
 
 setup = dict(
-    do_train=True,
-    do_predict=True,
-    tensorboard=True,
+    do_train=False,
+    do_predict=False,
+    tensorboard=False,
     device="cuda" if torch.cuda.is_available() else "cpu",
     max_checkpoints=10,
     checkpoint_path=os.path.join("checkpoints", "SID"),
