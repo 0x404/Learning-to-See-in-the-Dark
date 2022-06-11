@@ -15,7 +15,7 @@ all parameters mentioned by the article can be configured, see [config template]
 python3 launch.py --config configs/sid.py
 ```
 
-## test
+## Test
 
 complete config file according to [config template](./configs/sid.py), set `use_path` to False, `do_train` to False, `do_predict` to True.
 
